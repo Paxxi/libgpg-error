@@ -74,12 +74,10 @@
 # include <sys/time.h>
 #endif
 #include <sys/types.h>
-#include <sys/file.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <stdarg.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -89,6 +87,7 @@
 #  include <winsock2.h>
 # endif
 # include <windows.h>
+# include <io.h>
 #endif
 
 /* Enable tracing.  The value is the module name to be printed.  */
@@ -111,6 +110,15 @@
 
 
 #ifdef HAVE_W32_SYSTEM
+# ifndef S_IRUSR
+#  define S_IRUSR 0x400
+# endif
+# ifndef S_IWUSR
+#  define S_IWUSR 0x200
+# endif
+# ifndef S_IXUSR
+#  define S_IXUSR 0x100
+# endif
 # ifndef  S_IRGRP
 #  define S_IRGRP S_IRUSR
 # endif
@@ -901,7 +909,7 @@ func_fd_create (void **cookie, int fd, unsigned int modeflags, int no_close)
 #ifdef HAVE_DOSISH_SYSTEM
       /* Make sure it is in binary mode if requested.  */
       if ( (modeflags & O_BINARY) )
-        setmode (fd, O_BINARY);
+        _setmode (fd, O_BINARY);
 #endif
       fd_cookie->fd = fd;
       fd_cookie->no_close = no_close;
@@ -939,7 +947,7 @@ func_fd_read (void *cookie, void *buffer, size_t size)
       _gpgrt_pre_syscall ();
       do
         {
-          bytes_read = read (file_cookie->fd, buffer, size);
+          bytes_read = _read (file_cookie->fd, buffer, size);
         }
       while (bytes_read == -1 && errno == EINTR);
       _gpgrt_post_syscall ();
@@ -971,7 +979,7 @@ func_fd_write (void *cookie, const void *buffer, size_t size)
       _gpgrt_pre_syscall ();
       do
         {
-          bytes_written = write (file_cookie->fd, buffer, size);
+          bytes_written = _write (file_cookie->fd, buffer, size);
         }
       while (bytes_written == -1 && errno == EINTR);
       _gpgrt_post_syscall ();
@@ -1003,7 +1011,7 @@ func_fd_seek (void *cookie, gpgrt_off_t *offset, int whence)
   else
     {
       _gpgrt_pre_syscall ();
-      offset_new = lseek (file_cookie->fd, *offset, whence);
+      offset_new = _lseek (file_cookie->fd, *offset, whence);
       _gpgrt_post_syscall ();
       if (offset_new == -1)
         err = -1;
@@ -1077,7 +1085,7 @@ func_fd_destroy (void *cookie)
       if (IS_INVALID_FD (fd_cookie->fd))
         err = 0;
       else
-        err = fd_cookie->no_close? 0 : close (fd_cookie->fd);
+        err = fd_cookie->no_close? 0 : _close (fd_cookie->fd);
       mem_free (fd_cookie);
     }
   else
@@ -1182,7 +1190,7 @@ func_w32_read (void *cookie, void *buffer, size_t size)
           DWORD nread, ec;
 
           trace (("cookie=%p calling ReadFile", cookie));
-          if (!ReadFile (w32_cookie->hd, buffer, size, &nread, NULL))
+          if (!ReadFile (w32_cookie->hd, buffer, (DWORD)size, &nread, NULL))
             {
               ec = GetLastError ();
               trace (("cookie=%p ReadFile failed: ec=%ld", cookie,ec));
@@ -1235,7 +1243,7 @@ func_w32_write (void *cookie, const void *buffer, size_t size)
           DWORD nwritten;
 
           trace (("cookie=%p calling WriteFile", cookie));
-	  if (!WriteFile (w32_cookie->hd, buffer, size, &nwritten, NULL))
+	  if (!WriteFile (w32_cookie->hd, buffer, (DWORD)size, &nwritten, NULL))
 	    {
               DWORD ec = GetLastError ();
               trace (("cookie=%p WriteFile failed: ec=%ld", cookie, ec));
@@ -1601,7 +1609,7 @@ func_file_create (void **cookie, int *filedes,
       goto out;
     }
 
-  fd = open (path, modeflags, cmode);
+  fd = _open (path, modeflags, cmode);
   if (fd == -1)
     {
       err = -1;
@@ -1610,7 +1618,7 @@ func_file_create (void **cookie, int *filedes,
 #ifdef HAVE_DOSISH_SYSTEM
   /* Make sure it is in binary mode if requested.  */
   if ( (modeflags & O_BINARY) )
-    setmode (fd, O_BINARY);
+    _setmode (fd, O_BINARY);
 #endif
 
   file_cookie->fd = fd;
@@ -1871,7 +1879,7 @@ fill_stream (estream_t stream)
   else if (!bytes_read)
     stream->intern->indicators.eof = 1;
 
-  stream->intern->offset += stream->data_len;
+  stream->intern->offset += (gpgrt_off_t)stream->data_len;
   stream->data_len = bytes_read;
   stream->data_offset = 0;
 
@@ -1934,7 +1942,7 @@ flush_stream (estream_t stream)
       stream->data_flushed += data_flushed;
       if (stream->data_offset == data_flushed)
 	{
-	  stream->intern->offset += stream->data_offset;
+	  stream->intern->offset += (gpgrt_off_t)stream->data_offset;
 	  stream->data_offset = 0;
 	  stream->data_flushed = 0;
 	}
@@ -2275,7 +2283,7 @@ do_read_nbf (estream_t _GPGRT__RESTRICT stream,
 	break;
     }
 
-  stream->intern->offset += data_read;
+  stream->intern->offset += (gpgrt_off_t)data_read;
   *bytes_read = data_read;
 
   return err;
@@ -2547,7 +2555,7 @@ es_seek (estream_t _GPGRT__RESTRICT stream, gpgrt_off_t offset, int whence,
   off = offset;
   if (whence == SEEK_CUR)
     {
-      off = off - stream->data_len + stream->data_offset;
+      off = off - (gpgrt_off_t)stream->data_len + (gpgrt_off_t)stream->data_offset;
       off -= stream->unread_data_len;
     }
 
@@ -2627,7 +2635,7 @@ es_write_nbf (estream_t _GPGRT__RESTRICT stream,
 	data_written += ret;
     }
 
-  stream->intern->offset += data_written;
+  stream->intern->offset += (gpgrt_off_t)data_written;
   *bytes_written = data_written;
 
  out:
@@ -3059,12 +3067,12 @@ es_offset_calculate (estream_t stream)
 {
   gpgrt_off_t offset;
 
-  offset = stream->intern->offset + stream->data_offset;
+  offset = stream->intern->offset + (gpgrt_off_t)stream->data_offset;
   if (offset < stream->unread_data_len)
     /* Offset undefined.  */
     offset = 0;
   else
-    offset -= stream->unread_data_len;
+    offset -= (gpgrt_off_t)stream->unread_data_len;
 
   return offset;
 }
@@ -4505,15 +4513,9 @@ tmpfd (void)
 {
 #ifdef HAVE_W32_SYSTEM
   int attempts, n;
-#ifdef HAVE_W32CE_SYSTEM
   wchar_t buffer[MAX_PATH+9+12+1];
 # define mystrlen(a) wcslen (a)
   wchar_t *name, *p;
-#else
-  char buffer[MAX_PATH+9+12+1];
-# define mystrlen(a) strlen (a)
-  char *name, *p;
-#endif
   HANDLE file;
   int pid = GetCurrentProcessId ();
   unsigned int value;
@@ -4526,11 +4528,7 @@ tmpfd (void)
       return -1;
     }
   p = buffer + mystrlen (buffer);
-#ifdef HAVE_W32CE_SYSTEM
   wcscpy (p, L"_estream");
-#else
-  strcpy (p, "_estream");
-#endif
   p += 8;
   /* We try to create the directory but don't care about an error as
      it may already exist and the CreateFile would throw an error
@@ -4547,30 +4545,35 @@ tmpfd (void)
           *p++ = tohex (((value >> 28) & 0x0f));
           value <<= 4;
         }
-#ifdef HAVE_W32CE_SYSTEM
       wcscpy (p, L".tmp");
+
+#ifdef MS_APP
+	  CREATEFILE2_EXTENDED_PARAMETERS params;
+	  params.dwSize = sizeof(CREATEFILE2_EXTENDED_PARAMETERS);
+	  params.dwFileAttributes = FILE_ATTRIBUTE_TEMPORARY;
+	  params.dwFileFlags = FILE_FLAG_DELETE_ON_CLOSE;
+      file = CreateFile2 (buffer,
+                         GENERIC_READ | GENERIC_WRITE,
+                         0,
+                         CREATE_NEW,
+                         &params);
 #else
-      strcpy (p, ".tmp");
-#endif
-      file = CreateFile (buffer,
+      file = CreateFileW (buffer,
                          GENERIC_READ | GENERIC_WRITE,
                          0,
                          NULL,
                          CREATE_NEW,
                          FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
                          NULL);
+#endif
       if (file != INVALID_HANDLE_VALUE)
         {
-#ifdef HAVE_W32CE_SYSTEM
-          int fd = (int)file;
-#else
-          int fd = _open_osfhandle ((long)file, 0);
+          int fd = _open_osfhandle ((intptr_t)file, 0);
           if (fd == -1)
             {
               CloseHandle (file);
               return -1;
             }
-#endif
           return fd;
         }
       Sleep (1); /* One ms as this is the granularity of GetTickCount.  */

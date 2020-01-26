@@ -93,7 +93,7 @@
 #endif
 
 
-
+typedef int pid_t;
 /*
  * Local error function prototypes.
  */

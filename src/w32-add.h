@@ -1,7 +1,7 @@
-## w32-add.h - Snippet to be be included into gpg-error.h.
-## Comments are indicated by a double hash mark.  Due to a
-## peculiarity of the script the first used line must not
-## start with a hash mark.
+//## w32-add.h - Snippet to be be included into gpg-error.h.
+//## Comments are indicated by a double hash mark.  Due to a
+//## peculiarity of the script the first used line must not
+//## start with a hash mark.
 
 /* Decide whether to use the format_arg attribute.  */
 #if _GPG_ERR_GCC_VERSION > 20800
@@ -9,6 +9,9 @@
 #else
 # define _GPG_ERR_ATTR_FORMAT_ARG(a)
 #endif
+
+#include <inttypes.h>
+#include "config.h"
 
 /* A lean gettext implementation based on GNU style mo files which are
    required to be encoded in UTF-8.  There is a limit on 65534 entries
@@ -25,6 +28,10 @@ const char *_gpg_w32_dngettext (const char *domainname, const char *msgid1,
             _GPG_ERR_ATTR_FORMAT_ARG (2) _GPG_ERR_ATTR_FORMAT_ARG (3);
 const char *_gpg_w32_gettext_localename (void);
 int _gpg_w32_gettext_use_utf8 (int value);
+wchar_t*
+utf8_to_wchar(const char* string, size_t length, size_t* retlen);
+char*
+wchar_to_native(const wchar_t* string, size_t length, size_t* retlen);
 
 #ifdef GPG_ERR_ENABLE_GETTEXT_MACROS
 # define bindtextdomain(a,b) _gpg_w32_bindtextdomain ((a), (b))
@@ -42,6 +49,7 @@ int _gpg_w32_gettext_use_utf8 (int value);
 void gpgrt_w32_override_locale (const char *name, unsigned short langid);
 
 
+#if 0
 /* A simple iconv implementation w/o the need for an extra DLL.  */
 struct _gpgrt_w32_iconv_s;
 typedef struct _gpgrt_w32_iconv_s *gpgrt_w32_iconv_t;
@@ -52,6 +60,7 @@ int     gpgrt_w32_iconv_close (gpgrt_w32_iconv_t cd);
 size_t  gpgrt_w32_iconv (gpgrt_w32_iconv_t cd,
                          const char **inbuf, size_t *inbytesleft,
                          char **outbuf, size_t *outbytesleft);
+#endif
 
 #ifdef GPGRT_ENABLE_W32_ICONV_MACROS
 # define ICONV_CONST const

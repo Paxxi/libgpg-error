@@ -1187,7 +1187,11 @@ gpgrt_cmp_version (const char *a, const char *b, int level)
 char *
 gpgrt_w32_reg_query_string (const char *root, const char *dir, const char *name)
 {
+#ifdef MS_APP
+	return NULL;
+#else
   return _gpgrt_w32_reg_query_string (root, dir, name);
+#endif
 }
 
 #endif /*HAVE_W32_SYSTEM*/

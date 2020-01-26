@@ -22,10 +22,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
 #ifdef HAVE_W32_SYSTEM
 # include <windows.h>
+# include "w32-add.h"
+# include <io.h>
 #endif
 #ifdef HAVE_STAT
 # include <sys/stat.h>
@@ -41,10 +42,10 @@
 int
 _gpgrt_fd_valid_p (int fd)
 {
-  int d = dup (fd);
+  int d = _dup (fd);
   if (d < 0)
     return 0;
-  close (d);
+  _close (d);
   return 1;
 }
 
@@ -63,42 +64,54 @@ _gpgrt_getenv (const char *name)
 
 #ifdef HAVE_W32_SYSTEM
   {
-    int len, size;
-    char *result;
+    size_t len, size;
+    wchar_t *resultW;
 
-    len = GetEnvironmentVariable (name, NULL, 0);
+	wchar_t* nameW = utf8_to_wchar(name, strlen(name), &len);
+
+	if (!len || !nameW)
+		return NULL;
+
+    len = GetEnvironmentVariableW (nameW, NULL, 0);
     if (!len && GetLastError () == ERROR_ENVVAR_NOT_FOUND)
       {
         _gpg_err_set_errno (0);
+		free(nameW);
         return NULL;
       }
   again:
     size = len;
-    result = _gpgrt_malloc (size);
-    if (!result)
-      return NULL;
-    len = GetEnvironmentVariable (name, result, size);
+    resultW = _gpgrt_malloc (size);
+	if (!resultW)
+	{
+		free(nameW);
+		return NULL;
+	}
+    len = GetEnvironmentVariableW (nameW, resultW, size);
     if (len >= size)
       {
         /* Changed in the meantime - retry.  */
-        _gpgrt_free (result);
+        _gpgrt_free (resultW);
         goto again;
       }
+	_gpgrt_free(nameW);
     if (!len && GetLastError () == ERROR_ENVVAR_NOT_FOUND)
       {
         /* Deleted in the meantime.  */
-        _gpgrt_free (result);
+        _gpgrt_free (resultW);
         _gpg_err_set_errno (0);
         return NULL;
       }
     if (!len)
       {
         /* Other error.  FIXME: We need mapping fucntion. */
-        _gpgrt_free (result);
+        _gpgrt_free (resultW);
         _gpg_err_set_errno (EIO);
         return NULL;
       }
-
+	
+	char* result = wchar_to_native(resultW, len, &size);
+	_gpgrt_free(resultW);
     return result;
   }
 #else /*!HAVE_W32_SYSTEM*/
@@ -134,13 +147,24 @@ _gpgrt_setenv (const char *name, const char *value, int overwrite)
    * values - however, too much existing code still uses getenv.  */
   {
     int exists;
-    char tmpbuf[10];
+    wchar_t tmpbuf[10];
     char *buf;
+	wchar_t* nameW;
+	size_t nlength, vlength;
+	wchar_t* valueW;
+
+	nameW = utf8_to_wchar(name, strlen(name), &nlength);
+	if (!nlength || !nameW)
+		return GPG_ERR_EINVAL;
 
     if (!value && overwrite)
       {
-        if (!SetEnvironmentVariable (name, NULL))
-          return GPG_ERR_EINVAL;
+		if (!SetEnvironmentVariableW(nameW, NULL))
+		{
+			_gpgrt_free(nameW);
+			return GPG_ERR_EINVAL;
+		}
+		_gpgrt_free(nameW);
         if (getenv (name))
           {
             /* Ugly: Leaking memory.  */
@@ -153,9 +177,21 @@ _gpgrt_setenv (const char *name, const char *value, int overwrite)
         return 0;
       }
 
-    exists = GetEnvironmentVariable (name, tmpbuf, sizeof tmpbuf);
-    if ((! exists || overwrite) && !SetEnvironmentVariable (name, value))
-      return GPG_ERR_EINVAL; /* (Might also be ENOMEM.) */
+    exists = GetEnvironmentVariableW (nameW, tmpbuf, sizeof tmpbuf);
+	valueW = utf8_to_wchar(value, strlen(value), &vlength);
+	if (!vlength || !valueW)
+	{
+		_gpgrt_free(nameW);
+		return GPG_ERR_EINVAL;
+	}
+	if ((!exists || overwrite) && !SetEnvironmentVariableW(nameW, valueW))
+	{
+		_gpgrt_free(nameW);
+		_gpgrt_free(valueW);
+		return GPG_ERR_EINVAL; /* (Might also be ENOMEM.) */
+	}
+	_gpgrt_free(nameW);
+	_gpgrt_free(valueW);
     if (overwrite || !getenv (name))
       {
         /* Ugly: Leaking memory.  */
@@ -270,11 +306,12 @@ modestr_to_mode (const char *modestr)
 gpg_err_code_t
 _gpgrt_mkdir (const char *name, const char *modestr)
 {
-#ifdef HAVE_W32CE_SYSTEM
+#if 1
   wchar_t *wname;
+  size_t length;
   (void)modestr;
 
-  wname = utf8_to_wchar (name);
+  wname = utf8_to_wchar (name, strlen(name), &length);
   if (!wname)
     return _gpg_err_code_from_syserror ();
   if (!CreateDirectoryW (wname, NULL))
@@ -305,9 +342,13 @@ _gpgrt_mkdir (const char *name, const char *modestr)
 gpg_err_code_t
 _gpgrt_chdir (const char *name)
 {
-  if (chdir (name))
+#ifdef MS_APP
+	return 0;
+#else
+  if (_chdir (name))
     return _gpg_err_code_from_syserror ();
   return 0;
+#endif
 }
 
 
@@ -324,7 +365,7 @@ _gpgrt_getcwd (void)
       buffer = xtrymalloc (size+1);
       if (!buffer)
         return NULL;
-#ifdef HAVE_W32CE_SYSTEM
+#if 1
       strcpy (buffer, "/");  /* Always "/".  */
       return buffer;
 #else

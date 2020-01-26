@@ -668,7 +668,7 @@ my_nl_locale_name (const char *categoryname)
     }
   else
     {
-      LCID lcid;
+      LCID lcid = 0;
 
       /* Let the user override the system settings through environment
        *  variables, as on POSIX systems.  */
@@ -685,10 +685,12 @@ my_nl_locale_name (const char *categoryname)
 #endif /*!HAVE_W32CE_SYSTEM*/
 
       /* Use native Win32 API locale ID.  */
+#ifndef MS_APP
 #ifdef HAVE_W32CE_SYSTEM
       lcid = GetSystemDefaultLCID ();
 #else
       lcid = GetThreadLocale ();
+#endif
 #endif
       /* Strip off the sorting rules, keep only the language part.  */
       langid = LANGIDFROMLCID (lcid);
@@ -1239,6 +1241,8 @@ free_domain (struct loaded_domain *domain)
   jnlib_free (domain);
 }
 
+wchar_t*
+utf8_to_wchar(const char* string, size_t length, size_t* retlen);
 
 static struct loaded_domain *
 load_domain (const char *filename)
@@ -1249,13 +1253,26 @@ load_domain (const char *filename)
   struct loaded_domain *domain = NULL;
   size_t to_read;
   char *read_ptr;
+  wchar_t* filenameW;
+  size_t length;
 
-  fh = CreateFileA (filename, GENERIC_READ, FILE_SHARE_WRITE, NULL,
+  filenameW = utf8_to_wchar(filename, strlen(filename), &length);
+  if (!length || !filenameW)
+	  return NULL;
+
+#ifdef MS_APP
+  fh = CreateFile2 (filenameW, GENERIC_READ, FILE_SHARE_WRITE, 
+                    OPEN_EXISTING, NULL);
+#else
+  fh = CreateFileW (filenameW, GENERIC_READ, FILE_SHARE_WRITE, NULL,
                     OPEN_EXISTING, 0, NULL);
+#endif
+
+  gpgrt_free(filenameW);
   if (fh == INVALID_HANDLE_VALUE)
     return NULL;
 
-  size = GetFileSize (fh, NULL);
+  size = GetFileSizeEx (fh, NULL);
   if (size == INVALID_FILE_SIZE)
     {
       CloseHandle (fh);
@@ -1355,7 +1372,7 @@ load_domain (const char *filename)
    string STRING.  Caller must free this value. On failure returns
    NULL.  The result of calling this function with STRING set to NULL
    is not defined. */
-static wchar_t *
+wchar_t *
 utf8_to_wchar (const char *string, size_t length, size_t *retlen)
 {
   int n;
@@ -1392,7 +1409,7 @@ utf8_to_wchar (const char *string, size_t length, size_t *retlen)
    Caller must free this value. On failure returns NULL.
    The result of calling this function with STRING set to NULL
    is not defined. */
-static char *
+char *
 wchar_to_native (const wchar_t *string, size_t length, size_t *retlen)
 {
   int n;

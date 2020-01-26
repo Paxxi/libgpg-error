@@ -85,7 +85,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <stdarg.h>
 #include <errno.h>
 #include <stddef.h>
@@ -820,7 +819,7 @@ read_values (valueitem_t valuetable, size_t valuetable_len, va_list vaargs)
    number of bytes actually written.  */
 static int
 pad_out (estream_printf_out_t outfnc, void *outfncarg,
-         int padchar, int count, size_t *nbytes)
+         int padchar, size_t count, size_t *nbytes)
 {
   char buf[32];
   size_t n;

@@ -38,13 +38,14 @@
 #  include <winsock2.h>
 # endif
 # include <windows.h>
+# include <io.h>
+#include <WS2tcpip.h>
 #else /*!HAVE_W32_SYSTEM*/
 # include <sys/socket.h>
 # include <sys/un.h>
 # include <netinet/in.h>
 # include <arpa/inet.h>
 #endif /*!HAVE_W32_SYSTEM*/
-#include <unistd.h>
 #include <fcntl.h>
 /* #include <execinfo.h> */
 
@@ -53,6 +54,15 @@
 
 
 #ifdef HAVE_W32_SYSTEM
+# ifndef S_IRUSR
+#  define S_IRUSR 0x400
+# endif
+# ifndef S_IWUSR
+#  define S_IWUSR 0x200
+# endif
+# ifndef S_IXUSR
+#  define S_IXUSR 0x100
+# endif
 # ifndef S_IRWXG
 #  define S_IRGRP S_IRUSR
 #  define S_IWGRP S_IWUSR
@@ -89,7 +99,7 @@
 
 
 static estream_t logstream;
-static int log_socket = -1;
+static SOCKET log_socket = -1;
 static char prefix_buffer[80];
 static int with_time;
 static int with_prefix;
@@ -138,7 +148,7 @@ _gpgrt_inc_errorcount (void)
    to a socket.  */
 struct fun_cookie_s
 {
-  int fd;
+  SOCKET fd;
   int quiet;
   int want_socket;
   int is_socket;
@@ -147,7 +157,6 @@ struct fun_cookie_s
 #endif
   char name[1];
 };
-
 
 /* Write NBYTES of BUFFER to file descriptor FD. */
 static int
@@ -164,10 +173,10 @@ writen (int fd, const void *buffer, size_t nbytes, int is_socket)
     {
 #ifdef HAVE_W32_SYSTEM
       if (is_socket)
-        nwritten = send (fd, buf, nleft, 0);
+        nwritten = send (fd, buf, (int)nleft, 0);
       else
 #endif
-        nwritten = write (fd, buf, nleft);
+        nwritten = _write (fd, buf, nleft);
 
       if (nwritten < 0 && errno == EINTR)
         continue;
@@ -367,8 +376,7 @@ fun_writer (void *cookie_arg, const void *buffer, size_t size)
       cookie->fd = addrlen? socket (pf, SOCK_STREAM, 0) : -1;
       if (cookie->fd == -1)
         {
-          if (!cookie->quiet && !running_detached
-              && isatty (_gpgrt_fileno (es_stderr)))
+          if (!cookie->quiet && !running_detached)
             _gpgrt_fprintf (es_stderr,
                             "failed to create socket for logging: %s\n",
                             strerror (errno));
@@ -377,8 +385,7 @@ fun_writer (void *cookie_arg, const void *buffer, size_t size)
         {
           if (connect (cookie->fd, srvr_addr, addrlen) == -1)
             {
-              if (!cookie->quiet && !running_detached
-                  && isatty (_gpgrt_fileno (es_stderr)))
+              if (!cookie->quiet && !running_detached)
                 _gpgrt_fprintf (es_stderr, "can't connect to '%s%s': %s\n",
                                 cookie->name, name_for_err, strerror(errno));
               sock_close (cookie->fd);
@@ -536,7 +543,7 @@ set_file_fd (const char *name, int fd, estream_t stream)
   else
     {
       do
-        cookie->fd = open (name, O_WRONLY|O_APPEND|O_CREAT,
+        cookie->fd = _open (name, O_WRONLY|O_APPEND|O_CREAT,
                            (S_IRUSR|S_IRGRP|S_IROTH|S_IWUSR|S_IWGRP|S_IWOTH));
       while (cookie->fd == -1 && errno == EINTR);
     }
@@ -826,10 +833,10 @@ print_prefix (int level, int leading_backspace)
           if (get_pid_suffix_cb && (pidfmt=get_pid_suffix_cb (&pidsuf)))
             rc = _gpgrt_fprintf_unlocked (logstream,
                                           pidfmt == 1? "[%u.%lu]":"[%u.%lx]",
-                                          (unsigned int)getpid (), pidsuf);
+                                          (unsigned int)GetCurrentProcessId (), pidsuf);
           else
             rc = _gpgrt_fprintf_unlocked (logstream, "[%u]",
-                                          (unsigned int)getpid ());
+                                          (unsigned int)GetCurrentProcessId ());
           if (rc > 0)
             length += rc;
         }
@@ -892,7 +899,7 @@ _gpgrt_logv_internal (int level, int ignore_arg_ptr, const char *extrastring,
 
   if (!logstream)
     {
-#ifdef HAVE_W32_SYSTEM
+#if defined(HAVE_W32_SYSTEM) && !defined(MS_APP)
       char *tmp;
 
       tmp = (no_registry

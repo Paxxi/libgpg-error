@@ -19,12 +19,15 @@
 #ifndef _LIBGETTEXT_H
 #define _LIBGETTEXT_H 1
 
+#include "config.h"
+
 /* NLS can be disabled through the configure --disable-nls option.  */
 #if ENABLE_NLS
 
 #if HAVE_W32_SYSTEM
   /* We have a gettext implementation in gpg-error.h which get
      included anyway.  */
+#include "w32-add.h"
 #else /*!HAVE_W32_SYSTEM*/
   /* Get declarations of GNU message catalog functions.  */
 # include <libintl.h>
