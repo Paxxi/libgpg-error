@@ -16,7 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
+#include <io.h>
 
 #define PGM "mkheader"
 
@@ -409,7 +409,7 @@ include_file (const char *fname, int lnr, const char *name, void (*outf)(char*))
 
   repl_flag = !!strchr (name, '&');
   incfname = mk_include_name (name, repl_flag? host_triplet : NULL);
-  fp = fopen (incfname, "r");
+    fp = fopen (incfname, "r");
   if (!fp && repl_flag)
     {
       /* Try again using the OS string.  */
@@ -483,12 +483,12 @@ try_include_file (const char *fname, int lnr, const char *name,
 
   repl_flag = !!strchr (name, '&');
   incfname = mk_include_name (name, repl_flag? host_triplet : NULL);
-  rc = access (incfname, R_OK);
+  rc = _access (incfname, 4);
   if (rc && repl_flag)
     {
       free (incfname);
       incfname = mk_include_name (name, host_os);
-      rc = access (incfname, R_OK);
+      rc = _access (incfname, 4);
     }
   if (!rc)
     include_file (fname, lnr, name, outf);

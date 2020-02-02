@@ -2,18 +2,22 @@ cmake_minimum_required(VERSION 3.0)
 
 project(libgpg-error VERSION 1.36.0 LANGUAGES C)
 
+option(GENERATE_FILES "Generate header files, run this when bumping version" OFF)
+
 find_package(iconv NO_MODULE REQUIRED)
 
 if(MSVC)
   set(CMAKE_DEBUG_POSTFIX "d")
 endif()
 
-# find_program(AWK awk)
-# include(FindPackageHandleStandardArgs)
-# find_package_handle_standard_args(AWK REQUIRED_VARS AWK)
-# if(NOT ${AWK_FOUND})
-#   message(FATAL_ERROR "AWK not found, can't generate error codes")
-# endif()
+if(GENERATE_FILES)
+  find_program(AWK awk)
+  include(FindPackageHandleStandardArgs)
+  find_package_handle_standard_args(AWK REQUIRED_VARS AWK)
+  if(NOT ${AWK_FOUND})
+    message(FATAL_ERROR "AWK not found, can't generate error codes")
+  endif()
+endif()
 
 add_library(libgpg-error
   cmake/libgpg-error.def
@@ -33,7 +37,7 @@ add_library(libgpg-error
   src/estream-printf.h
   src/estream.c
   src/gettext.h
-  # src/gpg-error.c
+  # src/gpg-error.c # This is included by another file so it's not required
   src/gpg-error.h
   src/gpgrt-int.h
   src/init.c
@@ -58,7 +62,12 @@ add_library(libgpg-error
   src/w32-lock.c
   src/w32-thread.c
 )
-
+# if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+#   target_compile_definitions(libgpg-error
+#     PRIVATE
+#       _WIN64
+#   )
+# endif()
 if (WINDOWS_STORE)
   target_compile_definitions(libgpg-error PRIVATE MS_APP)
 else()
@@ -87,67 +96,69 @@ target_link_libraries(libgpg-error
   PUBLIC iconv::iconv
 )
 
-# add_custom_command(
-#   TARGET libgpg-error
-#   PRE_BUILD
-#   COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=3 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-sources.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/err-sources.h
-#   COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=2 -v nogettext=1 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-sources.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/err-sources-sym.h
-#   COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=3 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-codes.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/err-codes.h
-#   COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=2 -v nogettext=1 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-codes.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/err-codes-sym.h
-#   COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrnos.awk ${CMAKE_CURRENT_SOURCE_DIR}/src/errnos.in > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/code-to-errno.h
-#   COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=2 -v nogettext=1 -v prefix=GPG_ERR_ -v namespace=errnos_ ${CMAKE_CURRENT_SOURCE_DIR}/src/errnos.in > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/errnos-sym.h
-# )
+if(GENERATE_FILES)
+  add_custom_command(
+    TARGET libgpg-error
+    PRE_BUILD
+    COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=3 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-sources.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/src/err-sources.h
+    COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=2 -v nogettext=1 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-sources.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/src/err-sources-sym.h
+    COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=3 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-codes.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/src/err-codes.h
+    COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=2 -v nogettext=1 ${CMAKE_CURRENT_SOURCE_DIR}/src/err-codes.h.in > ${CMAKE_CURRENT_SOURCE_DIR}/src/err-codes-sym.h
+    COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrnos.awk ${CMAKE_CURRENT_SOURCE_DIR}/src/errnos.in > ${CMAKE_CURRENT_SOURCE_DIR}/src/code-to-errno.h
+    COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkstrtable.awk -v textidx=2 -v nogettext=1 -v prefix=GPG_ERR_ -v nspace=errnos_ ${CMAKE_CURRENT_SOURCE_DIR}/src/errnos.in > ${CMAKE_CURRENT_SOURCE_DIR}/src/errnos-sym.h
+  )
 
 
-# ADD_EXECUTABLE(mkheader src/mkheader.c)
-# target_compile_definitions(mkheader
-#   PRIVATE
-#   HAVE_CONFIG_H
-#   _CRT_SECURE_NO_WARNINGS
-#   _CRT_NONSTDC_NO_WARNINGS)
-  
-# target_include_directories(mkheader
-#   PRIVATE
-#   $<BUILD_INTERFACE:.;cmake;src;${CMAKE_CURRENT_BINARY_DIR}>
-#   INTERFACE
-#   $<INSTALL_INTERFACE:include>
-# )
-  
-# add_custom_command(TARGET mkheader
-#   POST_BUILD
-#   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR}/src $<TARGET_FILE:mkheader> "mingw32" "win32-msvc" "gpg-error.h.in" ${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h "1.27" "0x011b00" > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gpg-error.h
-# )
+  ADD_EXECUTABLE(mkheader src/mkheader.c)
+  target_compile_definitions(mkheader
+    PRIVATE
+    HAVE_CONFIG_H
+    _CRT_SECURE_NO_WARNINGS
+    _CRT_NONSTDC_NO_WARNINGS)
+    
+  target_include_directories(mkheader
+    PRIVATE
+    $<BUILD_INTERFACE:.;cmake;src;${CMAKE_CURRENT_BINARY_DIR}>
+    INTERFACE
+    $<INSTALL_INTERFACE:include>
+  )
+    
+  add_custom_command(TARGET mkheader
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR}/src $<TARGET_FILE:mkheader> "mingw32" "gpg-error.h.in" ${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h "1.36" "0x012400" > ${CMAKE_CURRENT_SOURCE_DIR}/src/gpg-error.h
+  )
 
-# ADD_EXECUTABLE(mkerrcodes src/mkerrcodes.c)
-# target_compile_definitions(mkerrcodes
-#   PRIVATE
-#   HAVE_CONFIG_H
-#   _CRT_SECURE_NO_WARNINGS
-#   _CRT_NONSTDC_NO_WARNINGS)
-  
-# target_include_directories(mkerrcodes
-#   PRIVATE
-#   $<BUILD_INTERFACE:.;cmake;src;${CMAKE_CURRENT_BINARY_DIR}>
-#   INTERFACE
-#   $<INSTALL_INTERFACE:include>
-# )
+  ADD_EXECUTABLE(mkerrcodes src/mkerrcodes.c)
+  target_compile_definitions(mkerrcodes
+    PRIVATE
+    HAVE_CONFIG_H
+    _CRT_SECURE_NO_WARNINGS
+    _CRT_NONSTDC_NO_WARNINGS)
+    
+  target_include_directories(mkerrcodes
+    PRIVATE
+    $<BUILD_INTERFACE:.;cmake;src;${CMAKE_CURRENT_BINARY_DIR}>
+    INTERFACE
+    $<INSTALL_INTERFACE:include>
+  )
 
-# add_custom_command(
-#   TARGET mkerrcodes
-#   PRE_BUILD 
-#   COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrcodes1.awk ${CMAKE_CURRENT_SOURCE_DIR}/src/errnos.in > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/_mkerrcodes.h
-#   COMMAND cl -E ${CMAKE_CURRENT_SOURCE_DIR}/cmake/_mkerrcodes.h | findstr GPG_ERR_ | \"${AWK}\" -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrcodes.awk > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/mkerrcodes.h
-#   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_SOURCE_DIR}/cmake/_mkerrcodes.h
-# )
+  add_custom_command(
+    TARGET mkerrcodes
+    PRE_BUILD 
+    COMMAND ${AWK} -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrcodes1.awk ${CMAKE_CURRENT_SOURCE_DIR}/src/errnos.in > ${CMAKE_CURRENT_BINARY_DIR}/_mkerrcodes.h
+    COMMAND cl -E ${CMAKE_CURRENT_BINARY_DIR}/_mkerrcodes.h | findstr GPG_ERR_ | \"${AWK}\" -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrcodes.awk > ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrcodes.h
+    COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_BINARY_DIR}/_mkerrcodes.h
+  )
 
-# add_custom_command(
-#   TARGET mkerrcodes
-#   POST_BUILD 
-#   COMMAND $<TARGET_FILE:mkerrcodes> | \"${AWK}\" -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrcodes2.awk > ${CMAKE_CURRENT_SOURCE_DIR}/cmake/code-from-errno.h
-# )
+  add_custom_command(
+    TARGET mkerrcodes
+    POST_BUILD 
+    COMMAND $<TARGET_FILE:mkerrcodes> | \"${AWK}\" -f ${CMAKE_CURRENT_SOURCE_DIR}/src/mkerrcodes2.awk > ${CMAKE_CURRENT_SOURCE_DIR}/src/code-from-errno.h
+  )
 
-# add_dependencies(libgpg-error mkheader)
-# add_dependencies(libgpg-error mkerrcodes)
+  add_dependencies(libgpg-error mkheader)
+  add_dependencies(libgpg-error mkerrcodes)
+endif(GENERATE_FILES)
 
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(

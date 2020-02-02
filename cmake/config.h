@@ -153,7 +153,7 @@
 #define SIZEOF_UNSIGNED_LONG 4
 
 /* The size of `void *', as computed by sizeof. */
-#if defined(__x86_64) || defined(_M_X64)
+#if defined(__x86_64) || defined(_M_X64) || defined(_M_ARM64)
 #define SIZEOF_VOID_P 8
 #else
 #define SIZEOF_VOID_P 4

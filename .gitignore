@@ -9,8 +9,6 @@ aclocal.m4
 autom4te.cache/
 configure
 config.h.in
-src/err-codes.h
-src/err-sources.h
 /po/libgpg-error.pot
 /lang/Makefile
 /lang/cl/Makefile
@@ -26,19 +24,12 @@ src/err-sources.h
 /config.h
 /Makefile
 /src/Makefile
-/src/code-from-errno.h
-/src/code-to-errno.h
-/src/err-codes-sym.h
-/src/err-sources-sym.h
-/src/errnos-sym.h
 /src/extra-h.in
 /src/gpg-error
 /src/gpg-error-config
 /src/gpg-error.def
-/src/gpg-error.h
 /src/libgpg-error.la
 /src/mkerrcodes
-/src/mkerrcodes.h
 /src/mkw32errmap.map.c
 /src/versioninfo.rc
 /stamp-h1
@@ -49,3 +40,4 @@ src/err-sources.h
 /doc/stamp-vti
 /doc/version.texi
 /VERSION
+build*/

@@ -123,7 +123,7 @@ reader (void *arg)
 {
   struct reader_context_s *ctx = arg;
   int nbytes;
-  ssize_t nread;
+  gpgrt_ssize_t nread;
 
   trace (("%p: reader starting", ctx));
 
@@ -449,7 +449,7 @@ static DWORD CALLBACK
 writer (void *arg)
 {
   struct writer_context_s *ctx = arg;
-  ssize_t nwritten;
+  gpgrt_ssize_t nwritten;
 
   trace (("%p: writer starting", ctx));
 
